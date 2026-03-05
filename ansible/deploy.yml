@@ -1,0 +1,60 @@
+---
+- name: Deploy simple python app
+  hosts: app
+  become: true
+  vars:
+    app_name: simple-python-app
+    app_dir: /opt/simple-python-app
+    app_user: www-data
+    app_group: www-data
+    app_host: 0.0.0.0
+    app_port: 8000
+
+  tasks:
+    - name: Ensure system packages are installed
+      ansible.builtin.apt:
+        name:
+          - python3
+        state: present
+        update_cache: true
+
+    - name: Ensure application directory exists
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+
+    - name: Copy application code
+      ansible.builtin.copy:
+        src: ../app/
+        dest: "{{ app_dir }}/app/"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+
+    - name: Install systemd unit
+      ansible.builtin.template:
+        src: templates/simple-python-app.service.j2
+        dest: /etc/systemd/system/{{ app_name }}.service
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart app
+
+    - name: Ensure app service is enabled and running
+      ansible.builtin.systemd:
+        name: "{{ app_name }}"
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart app
+      ansible.builtin.systemd:
+        name: "{{ app_name }}"
+        state: restarted
